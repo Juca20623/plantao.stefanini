@@ -1,0 +1,953 @@
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Organizador de Plantão com Calendário, Comentários por Dia</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"
+  />
+  <style>
+    /* Custom scrollbar for better UX */
+    ::-webkit-scrollbar {
+      height: 8px;
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f1f1;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #888;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #555;
+    }
+    /* Calendar grid */
+    .calendar {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 1px;
+      background-color: #ddd;
+      border-radius: 0.375rem;
+      overflow: hidden;
+      user-select: none;
+    }
+    .calendar-header, .calendar-day {
+      background-color: white;
+      padding: 0.5rem;
+      text-align: center;
+      font-weight: 600;
+      font-size: 0.875rem;
+      position: relative;
+    }
+    .calendar-day {
+      min-height: 90px;
+      cursor: default;
+      font-size: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      padding-left: 6px;
+    }
+    .calendar-day.today {
+      background-color: #e0f2fe;
+      font-weight: 700;
+    }
+    .calendar-day.inactive {
+      color: #a0aec0;
+      background-color: #f9fafb;
+    }
+    .shift-label {
+      background-color: #3b82f6;
+      color: white;
+      font-size: 0.75rem;
+      border-radius: 0.25rem;
+      padding: 2px 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 4px;
+      width: 100%;
+      box-sizing: border-box;
+      cursor: default;
+      font-weight: 600;
+    }
+    .day-number {
+      font-weight: 600;
+      margin-bottom: 4px;
+      width: 100%;
+      text-align: left;
+      padding-left: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .comment-icon {
+      color: #2563eb;
+      cursor: pointer;
+      font-size: 0.9rem;
+      margin-left: 4px;
+      flex-shrink: 0;
+    }
+    /* Comments section */
+    #commentsSection {
+      max-width: 800px;
+      width: 100%;
+      margin-top: 1rem;
+      background: white;
+      border-radius: 0.5rem;
+      box-shadow: 0 0 10px rgb(0 0 0 / 0.1);
+      padding: 1rem 1.5rem;
+    }
+    #commentsList {
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 1rem;
+    }
+    .comment-item {
+      border-bottom: 1px solid #e2e8f0;
+      padding: 0.5rem 0;
+    }
+    .comment-item:last-child {
+      border-bottom: none;
+    }
+    .comment-author {
+      font-weight: 700;
+      color: #1e40af;
+    }
+    .comment-date {
+      font-size: 0.75rem;
+      color: #64748b;
+      margin-left: 0.5rem;
+    }
+    .comment-text {
+      margin-top: 0.25rem;
+      white-space: pre-wrap;
+    }
+  </style>
+
+  <style>
+    /* Adicione isso ao seu CSS existente */
+        .editing .edit-comment-btn,
+        .editing .delete-comment-btn {
+      display: none;
+    }
+        .editing .save-comment-btn,
+        .editing .cancel-comment-btn {
+      display: inline-block;
+    }
+  /* Adicione isso na seção <style> do seu CSS */
+    .comment-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .comment-action-btn {
+      padding: 2px 6px;
+      font-size: 0.7rem;
+      border-radius: 4px;
+      cursor: pointer;
+      border: none;
+    }
+    .edit-comment-btn {
+      background-color: #f59e0b;
+      color: white;
+    }
+    .delete-comment-btn {
+      background-color: #ef4444;
+      color: white;
+    }
+    .save-comment-btn {
+      background-color: #10b981;
+      color: white;
+      display: none;
+    }
+    .cancel-comment-btn {
+      background-color: #64748b;
+      color: white;
+      display: none;
+    }
+    .editing .comment-text {
+      display: none;
+    }
+    .comment-edit-textarea {
+      width: 100%;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 4px;
+      margin-top: 4px;
+      display: none;
+    }
+    .editing .comment-edit-textarea {
+      display: block;
+    }
+</style>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col items-center p-4 font-sans">
+  <h1 class="text-3xl font-bold mb-6 text-gray-800">Organizador de Plantão</h1>
+
+  <div class="w-full max-w-7xl bg-white rounded-lg shadow-lg p-6 mb-8">
+    <form id="shiftForm" class="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-4 flex-wrap" onsubmit="return false;">
+      <div class="flex items-center gap-2">
+        <label for="colaborador" class="font-semibold text-gray-700">Colaborador:</label>
+        <input
+          type="text"
+          id="colaborador"
+          placeholder="Nome do colaborador"
+          class="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          required
+        />
+      </div>
+      <div class="flex items-center gap-2">
+        <label for="dataInicio" class="font-semibold text-gray-700">Início:</label>
+        <input
+          type="date"
+          id="dataInicio"
+          class="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          required
+        />
+      </div>
+      <div class="flex items-center gap-2">
+        <label for="dataFim" class="font-semibold text-gray-700">Término:</label>
+        <input
+          type="date"
+          id="dataFim"
+          class="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          required
+        />
+      </div>
+      <button
+        id="addShiftBtn"
+        type="submit"
+        class="bg-blue-600 text-white px-5 py-2 rounded hover:bg-blue-700 transition"
+      >
+        Adicionar Plantão
+      </button>
+    </form>
+
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6 flex-wrap">
+      <div class="flex items-center gap-2">
+        <label for="filterMonth" class="font-semibold text-gray-700">Pesquisar por mês:</label>
+        <input
+          type="month"
+          id="filterMonth"
+          class="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <button id="filterBtn" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition">Filtrar</button>
+        <button id="clearFilterBtn" class="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500 transition">Limpar</button>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto mb-6">
+      <table class="min-w-full border border-gray-300 rounded-lg overflow-hidden">
+        <thead class="bg-blue-600 text-white">
+          <tr>
+            <th class="px-4 py-2 text-left">Colaborador</th>
+            <th class="px-4 py-2 text-left">Início</th>
+            <th class="px-4 py-2 text-left">Término</th>
+            <th class="px-4 py-2 text-center w-24">Ações</th>
+          </tr>
+        </thead>
+        <tbody id="shiftTableBody" class="divide-y divide-gray-200 bg-white">
+          <!-- Linhas de plantão serão inseridas aqui -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="w-full max-w-7xl bg-white rounded-lg shadow-lg p-6 mb-8">
+    <h2 class="text-xl font-semibold mb-4 text-gray-800">Calendário do Plantão</h2>
+    <div id="calendar" class="calendar select-none"></div>
+  </div>
+
+  <div id="commentsSection" class="w-full max-w-7xl">
+    <h2 class="text-xl font-semibold mb-4 text-gray-800">Comentários do Dia Selecionado</h2>
+    <div id="selectedDateDisplay" class="mb-2 font-semibold text-gray-700">Nenhum dia selecionado</div>
+    <form id="commentForm" class="flex flex-col md:flex-row md:items-center gap-4 flex-wrap">
+      <input
+        type="text"
+        id="commentAuthor"
+        placeholder="Seu nome"
+        class="border border-gray-300 rounded px-3 py-2 flex-grow focus:outline-none focus:ring-2 focus:ring-blue-500"
+        required
+      />
+      <textarea
+        id="commentText"
+        placeholder="Digite seu comentário"
+        rows="2"
+        class="border border-gray-300 rounded px-3 py-2 flex-grow focus:outline-none focus:ring-2 focus:ring-blue-500"
+        required
+      ></textarea>
+      <button
+        type="submit"
+        class="bg-indigo-600 text-white px-5 py-2 rounded hover:bg-indigo-700 transition"
+      >
+        Adicionar Comentário
+      </button>
+    </form>
+    <div id="commentsList" class="mt-4 max-h-48 overflow-y-auto"></div>
+  </div>
+
+  <script>
+    const shiftForm = document.getElementById('shiftForm');
+    const colaboradorInput = document.getElementById('colaborador');
+    const dataInicioInput = document.getElementById('dataInicio');
+    const dataFimInput = document.getElementById('dataFim');
+    const shiftTableBody = document.getElementById('shiftTableBody');
+    const calendarEl = document.getElementById('calendar');
+
+    const filterMonthInput = document.getElementById('filterMonth');
+    const filterBtn = document.getElementById('filterBtn');
+    const clearFilterBtn = document.getElementById('clearFilterBtn');
+
+    const commentForm = document.getElementById('commentForm');
+    const commentAuthorInput = document.getElementById('commentAuthor');
+    const commentTextInput = document.getElementById('commentText');
+    const commentsList = document.getElementById('commentsList');
+    const selectedDateDisplay = document.getElementById('selectedDateDisplay');
+
+    // Estado dos plantões e comentários
+    let shifts = [];
+    let comments = [];
+    let currentFilter = null;
+    let selectedDate = null; // Date object
+
+    // Carregar dados do localStorage
+    function loadData() {
+      const shiftsData = localStorage.getItem('shifts');
+      if (shiftsData) {
+        const parsed = JSON.parse(shiftsData);
+        shifts = parsed.map(s => ({
+          ...s,
+          dataInicio: new Date(s.dataInicio),
+          dataFim: new Date(s.dataFim)
+        }));
+      }
+      const commentsData = localStorage.getItem('comments');
+      if (commentsData) {
+        comments = JSON.parse(commentsData);
+      }
+    }
+
+    // Salvar dados no localStorage
+    function saveData() {
+      localStorage.setItem('shifts', JSON.stringify(shifts));
+      localStorage.setItem('comments', JSON.stringify(comments));
+    }
+
+    // Função para formatar data no formato DD/MM/YYYY
+    function formatDate(date) {
+      if (!(date instanceof Date)) return '';
+      if (isNaN(date)) return '';
+      return date.toLocaleDateString('pt-BR');
+    }
+
+    // Função para formatar data para YYYY-MM-DD (para comparar e armazenar)
+    function formatDateISO(date) {
+      if (!(date instanceof Date)) return '';
+      if (isNaN(date)) return '';
+      return date.toISOString().slice(0, 10);
+    }
+
+    // Função para criar uma linha da tabela
+    function createRow(id, colaborador, dataInicio, dataFim) {
+      const tr = document.createElement('tr');
+
+      const tdColaborador = document.createElement('td');
+      tdColaborador.textContent = colaborador;
+      tdColaborador.className = 'px-4 py-2';
+
+      const tdInicio = document.createElement('td');
+      tdInicio.textContent = formatDate(dataInicio);
+      tdInicio.className = 'px-4 py-2';
+
+      const tdFim = document.createElement('td');
+      tdFim.textContent = formatDate(dataFim);
+      tdFim.className = 'px-4 py-2';
+
+      const tdActions = document.createElement('td');
+      tdActions.className = 'px-4 py-2 text-center';
+
+      // Botão editar
+      const editBtn = document.createElement('button');
+      editBtn.innerHTML = '<i class="fas fa-edit"></i>';
+      editBtn.title = 'Editar plantão';
+      editBtn.className = 'text-yellow-500 hover:text-yellow-700 mr-3 focus:outline-none';
+      editBtn.addEventListener('click', () => {
+        colaboradorInput.value = colaborador;
+        dataInicioInput.valueAsDate = dataInicio;
+        dataFimInput.valueAsDate = dataFim;
+        // Remove o plantão para edição
+        shifts = shifts.filter(s => s.id !== id);
+        saveData();
+        renderTable(currentFilter);
+        renderCalendar(currentFilter);
+      });
+
+      // Botão deletar
+      const deleteBtn = document.createElement('button');
+      deleteBtn.innerHTML = '<i class="fas fa-trash-alt"></i>';
+      deleteBtn.title = 'Remover plantão';
+      deleteBtn.className = 'text-red-600 hover:text-red-800 focus:outline-none';
+      deleteBtn.addEventListener('click', () => {
+        if (confirm(`Deseja realmente remover o plantão de ${colaborador} de ${formatDate(dataInicio)} até ${formatDate(dataFim)}?`)) {
+          shifts = shifts.filter(s => s.id !== id);
+          saveData();
+          renderTable(currentFilter);
+          renderCalendar(currentFilter);
+          if (selectedDate) renderCommentsForDate(selectedDate);
+        }
+      });
+
+      tdActions.appendChild(editBtn);
+      tdActions.appendChild(deleteBtn);
+
+      tr.appendChild(tdColaborador);
+      tr.appendChild(tdInicio);
+      tr.appendChild(tdFim);
+      tr.appendChild(tdActions);
+
+      return tr;
+    }
+
+    // Renderiza a tabela de plantões (com filtro opcional)
+    function renderTable(filterYearMonth = null) {
+      shiftTableBody.innerHTML = '';
+      let filteredShifts = shifts;
+      if (filterYearMonth) {
+        const [year, month] = filterYearMonth.split('-').map(Number);
+        filteredShifts = shifts.filter(({dataInicio, dataFim}) => {
+          // Verifica se o plantão tem algum dia no mês/ano filtrado
+          return (
+            (dataInicio.getFullYear() === year && dataInicio.getMonth() + 1 === month) ||
+            (dataFim.getFullYear() === year && dataFim.getMonth() + 1 === month) ||
+            (dataInicio < new Date(year, month - 1, 1) && dataFim > new Date(year, month - 1, 31))
+          );
+        });
+      }
+      filteredShifts.forEach(({id, colaborador, dataInicio, dataFim}) => {
+        const row = createRow(id, colaborador, dataInicio, dataFim);
+        shiftTableBody.appendChild(row);
+      });
+    }
+
+    // Gera o calendário do mês atual ou filtrado
+    function renderCalendar(filterYearMonth = null) {
+      calendarEl.innerHTML = '';
+
+      // Cabeçalho dos dias da semana
+      const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+      diasSemana.forEach(dia => {
+        const header = document.createElement('div');
+        header.className = 'calendar-header';
+        header.textContent = dia;
+        calendarEl.appendChild(header);
+      });
+
+      let ano, mes;
+      if (filterYearMonth) {
+        [ano, mes] = filterYearMonth.split('-').map(Number);
+        mes -= 1; // Ajusta para 0-based
+      } else {
+        const hoje = new Date();
+        ano = hoje.getFullYear();
+        mes = hoje.getMonth();
+      }
+
+      // Primeiro dia do mês
+      const primeiroDiaMes = new Date(ano, mes, 1);
+      // Último dia do mês
+      const ultimoDiaMes = new Date(ano, mes + 1, 0);
+      // Dia da semana do primeiro dia (0=Domingo, 6=Sábado)
+      const diaSemanaPrimeiro = primeiroDiaMes.getDay();
+
+      // Dias do mês anterior para preencher a primeira semana
+      const diasMesAnterior = diaSemanaPrimeiro;
+
+      // Total de células no calendário (6 semanas para garantir espaço)
+      const totalCelulas = 42;
+
+      // Data inicial para o calendário (pode ser do mês anterior)
+      const dataInicial = new Date(ano, mes, 1 - diasMesAnterior);
+
+      for (let i = 0; i < totalCelulas; i++) {
+        const diaAtual = new Date(dataInicial);
+        diaAtual.setDate(dataInicial.getDate() + i);
+
+        const diaNum = diaAtual.getDate();
+        const mesAtual = diaAtual.getMonth();
+
+        const div = document.createElement('div');
+        div.className = 'calendar-day';
+
+        // Dias fora do mês atual ficam com estilo inativo
+        if (mesAtual !== mes) {
+          div.classList.add('inactive');
+        }
+
+        // Marca o dia atual (se não estiver filtrando)
+        if (!filterYearMonth) {
+          const hoje = new Date();
+          if (
+            diaAtual.getDate() === hoje.getDate() &&
+            diaAtual.getMonth() === hoje.getMonth() &&
+            diaAtual.getFullYear() === hoje.getFullYear()
+          ) {
+            div.classList.add('today');
+          }
+        }
+
+        // Número do dia no topo com ícone de caneta para comentário
+        const diaNumeroEl = document.createElement('div');
+        diaNumeroEl.className = 'day-number';
+        diaNumeroEl.textContent = diaNum;
+
+        // Ícone caneta para adicionar/ver comentários
+        const penIcon = document.createElement('i');
+        penIcon.className = 'fas fa-pen comment-icon';
+        penIcon.title = 'Adicionar/ver comentários';
+        penIcon.addEventListener('click', () => {
+          selectedDate = new Date(diaAtual.getTime());
+          selectedDateDisplay.textContent = `Comentários para o dia ${formatDate(selectedDate)}`;
+          renderCommentsForDate(selectedDate);
+          // Scrolla para a seção de comentários
+          commentsSection.scrollIntoView({behavior: 'smooth'});
+        });
+
+        diaNumeroEl.appendChild(penIcon);
+        div.appendChild(diaNumeroEl);
+
+        // Adiciona os plantões que incluem esse dia (considerando filtro)
+        const shiftsHoje = shifts.filter(({dataInicio, dataFim}) => {
+          return diaAtual >= dataInicio && diaAtual <= dataFim;
+        });
+
+        shiftsHoje.forEach(({colaborador}) => {
+          const label = document.createElement('div');
+          label.className = 'shift-label';
+          label.title = colaborador;
+          label.textContent = colaborador;
+          div.appendChild(label);
+        });
+
+        calendarEl.appendChild(div);
+      }
+    }
+
+    // Renderiza comentários para a data selecionada
+    function renderCommentsForDate(date) {
+      commentsList.innerHTML = '';
+      if (!date) {
+        commentsList.textContent = 'Nenhum dia selecionado.';
+        return;
+      }
+      const dateISO = formatDateISO(date);
+      const commentsDoDia = comments.filter(c => c.date === dateISO);
+      if (commentsDoDia.length === 0) {
+        commentsList.textContent = 'Nenhum comentário para este dia.';
+        return;
+      }
+      commentsDoDia.forEach(({id, author, text}) => {
+        const div = document.createElement('div');
+        div.className = 'comment-item';
+
+        const authorEl = document.createElement('div');
+        authorEl.className = 'comment-author';
+        authorEl.textContent = author;
+
+        const dateEl = document.createElement('span');
+        dateEl.className = 'comment-date';
+        dateEl.textContent = dateISO;
+
+        authorEl.appendChild(dateEl);
+
+        const textEl = document.createElement('div');
+        textEl.className = 'comment-text';
+        textEl.textContent = text;
+
+        div.appendChild(authorEl);
+        div.appendChild(textEl);
+
+        commentsList.appendChild(div);
+      });
+    }
+
+    // Gera um ID único simples
+    function generateId() {
+      return '_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    // Função para adicionar plantão
+    function addShift() {
+      const colaborador = colaboradorInput.value.trim();
+      const dataInicioStr = dataInicioInput.value;
+      const dataFimStr = dataFimInput.value;
+
+      if (!colaborador) {
+        alert('Por favor, informe o nome do colaborador.');
+        colaboradorInput.focus();
+        return false;
+      }
+      if (!dataInicioStr) {
+        alert('Por favor, informe a data de início do plantão.');
+        dataInicioInput.focus();
+        return false;
+      }
+      if (!dataFimStr) {
+        alert('Por favor, informe a data de término do plantão.');
+        dataFimInput.focus();
+        return false;
+      }
+
+      // Criar objetos Date sem horário para evitar problemas de timezone
+      const dataInicio = new Date(dataInicioStr + 'T00:00:00');
+      const dataFim = new Date(dataFimStr + 'T00:00:00');
+
+      if (dataFim < dataInicio) {
+        alert('A data de término não pode ser anterior à data de início.');
+        dataFimInput.focus();
+        return false;
+      }
+
+      // Verifica se já existe plantão para o colaborador com datas que se sobrepõem
+      for (const s of shifts) {
+        if (s.colaborador.toLowerCase() === colaborador.toLowerCase()) {
+          if (dataInicio <= s.dataFim && dataFim >= s.dataInicio) {
+            alert('Já existe um plantão para este colaborador com datas que se sobrepõem.');
+            return false;
+          }
+        }
+      }
+
+      shifts.push({
+        id: generateId(),
+        colaborador,
+        dataInicio,
+        dataFim
+      });
+
+      saveData();
+      renderTable(currentFilter);
+      renderCalendar(currentFilter);
+
+      // Limpa inputs
+      colaboradorInput.value = '';
+      dataInicioInput.value = '';
+      dataFimInput.value = '';
+      colaboradorInput.focus();
+
+      return true;
+    }
+
+    // Função para aplicar filtro
+    function applyFilter() {
+      const filterVal = filterMonthInput.value;
+      if (filterVal) {
+        currentFilter = filterVal;
+      } else {
+        currentFilter = null;
+      }
+      renderTable(currentFilter);
+      renderCalendar(currentFilter);
+      // Limpa seleção de comentários ao filtrar
+      selectedDate = null;
+      selectedDateDisplay.textContent = 'Nenhum dia selecionado';
+      commentsList.innerHTML = '';
+    }
+
+    // Função para limpar filtro
+    function clearFilter() {
+      filterMonthInput.value = '';
+      currentFilter = null;
+      renderTable();
+      renderCalendar();
+      selectedDate = null;
+      selectedDateDisplay.textContent = 'Nenhum dia selecionado';
+      commentsList.innerHTML = '';
+    }
+
+    // Evento submit do formulário de plantão
+    shiftForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (addShift()) {
+        // Se estiver filtrando, atualiza a visualização filtrada
+        if (currentFilter) {
+          applyFilter();
+        }
+      }
+    });
+
+    // Eventos dos botões de filtro
+    filterBtn.addEventListener('click', () => {
+      applyFilter();
+    });
+    clearFilterBtn.addEventListener('click', () => {
+      clearFilter();
+    });
+
+    // Evento submit do formulário de comentários
+    commentForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!selectedDate) {
+        alert('Por favor, selecione um dia no calendário para adicionar comentários.');
+        return;
+      }
+      const author = commentAuthorInput.value.trim();
+      const text = commentTextInput.value.trim();
+      if (!author || !text) {
+        alert('Por favor, preencha seu nome e comentário.');
+        return;
+      }
+      comments.push({
+        id: generateId(),
+        author,
+        text,
+        date: formatDateISO(selectedDate)
+      });
+      saveData();
+      commentAuthorInput.value = '';
+      commentTextInput.value = '';
+      renderCommentsForDate(selectedDate);
+    });
+
+    // Inicializa dados do localStorage e renderiza tudo
+    function init() {
+      loadData();
+      renderTable();
+      renderCalendar();
+      selectedDateDisplay.textContent = 'Nenhum dia selecionado';
+      commentsList.textContent = 'Selecione um dia no calendário para ver comentários.';
+    }
+
+    // Carregar dados do localStorage
+    function loadData() {
+      const shiftsData = localStorage.getItem('shifts');
+      if (shiftsData) {
+        const parsed = JSON.parse(shiftsData);
+        shifts = parsed.map(s => ({
+          ...s,
+          dataInicio: new Date(s.dataInicio),
+          dataFim: new Date(s.dataFim)
+        }));
+      }
+      const commentsData = localStorage.getItem('comments');
+      if (commentsData) {
+        comments = JSON.parse(commentsData);
+      }
+    }
+
+    // Salvar dados no localStorage
+    function saveData() {
+      localStorage.setItem('shifts', JSON.stringify(shifts));
+      localStorage.setItem('comments', JSON.stringify(comments));
+    }
+
+    // Renderiza comentários para a data selecionada
+    function renderCommentsForDate(date) {
+      commentsList.innerHTML = '';
+      if (!date) {
+        commentsList.textContent = 'Nenhum dia selecionado.';
+        return;
+      }
+      const dateISO = formatDateISO(date);
+      const commentsDoDia = comments.filter(c => c.date === dateISO);
+      if (commentsDoDia.length === 0) {
+        commentsList.textContent = 'Nenhum comentário para este dia.';
+        return;
+      }
+      commentsDoDia.forEach(({id, author, text}) => {
+        const div = document.createElement('div');
+        div.className = 'comment-item';
+
+        const authorEl = document.createElement('div');
+        authorEl.className = 'comment-author';
+        authorEl.textContent = author;
+
+        const dateEl = document.createElement('span');
+        dateEl.className = 'comment-date';
+        dateEl.textContent = dateISO;
+
+        authorEl.appendChild(dateEl);
+
+        const textEl = document.createElement('div');
+        textEl.className = 'comment-text';
+        textEl.textContent = text;
+
+        div.appendChild(authorEl);
+        div.appendChild(textEl);
+
+        commentsList.appendChild(div);
+      });
+    }
+
+    // Inicializa tudo ao carregar a página
+    window.addEventListener('load', () => {
+      init();
+    });
+
+
+function renderCommentsForDate(date) {
+  commentsList.innerHTML = '';
+  if (!date) {
+    commentsList.textContent = 'Nenhum dia selecionado.';
+    return;
+  }
+  
+  const dateISO = formatDateISO(date);
+  const commentsDoDia = comments.filter(c => c.date === dateISO);
+  
+  if (commentsDoDia.length === 0) {
+    commentsList.textContent = 'Nenhum comentário para este dia.';
+    return;
+  }
+  
+  commentsDoDia.forEach((comment) => {
+    const {id, author, text} = comment;
+    const div = document.createElement('div');
+    div.className = 'comment-item';
+    div.dataset.commentId = id;
+
+    const authorEl = document.createElement('div');
+    authorEl.className = 'comment-author';
+    authorEl.textContent = author;
+
+    const dateEl = document.createElement('span');
+    dateEl.className = 'comment-date';
+    dateEl.textContent = dateISO;
+
+    authorEl.appendChild(dateEl);
+
+    const textEl = document.createElement('div');
+    textEl.className = 'comment-text';
+    textEl.textContent = text;
+
+    // Área de edição (textarea)
+    const editTextarea = document.createElement('textarea');
+    editTextarea.className = 'comment-edit-textarea';
+    editTextarea.value = text;
+
+    // Container para ações
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'comment-actions';
+
+    // Botão Editar
+    const editBtn = document.createElement('button');
+    editBtn.className = 'comment-action-btn edit-comment-btn';
+    editBtn.textContent = 'Editar';
+    editBtn.addEventListener('click', () => {
+      div.classList.add('editing');
+      editTextarea.focus();
+    });
+
+    // Botão Salvar (agora visível apenas durante edição)
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'comment-action-btn save-comment-btn';
+    saveBtn.textContent = 'Salvar';
+    saveBtn.style.display = 'none'; // Inicialmente oculto
+    saveBtn.addEventListener('click', () => {
+      const updatedText = editTextarea.value.trim();
+      if (updatedText) {
+        comment.text = updatedText;
+        saveData();
+        renderCommentsForDate(selectedDate);
+      }
+    });
+
+    // Botão Cancelar (agora visível apenas durante edição)
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'comment-action-btn cancel-comment-btn';
+    cancelBtn.textContent = 'Cancelar';
+    cancelBtn.style.display = 'none'; // Inicialmente oculto
+    cancelBtn.addEventListener('click', () => {
+      div.classList.remove('editing');
+      // Restaura os botões ao estado normal
+      editBtn.style.display = 'inline-block';
+      deleteBtn.style.display = 'inline-block';
+      saveBtn.style.display = 'none';
+      cancelBtn.style.display = 'none';
+    });
+
+    // Botão Excluir
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'comment-action-btn delete-comment-btn';
+    deleteBtn.textContent = 'Excluir';
+    deleteBtn.addEventListener('click', () => {
+      if (confirm('Deseja realmente excluir este comentário?')) {
+        comments = comments.filter(c => c.id !== id);
+        saveData();
+        renderCommentsForDate(selectedDate);
+      }
+    });
+
+    // Atualize o evento do botão Editar para mostrar/ocultar os botões corretamente
+    editBtn.addEventListener('click', () => {
+      div.classList.add('editing');
+      editTextarea.focus();
+      // Oculta Editar e Excluir
+      editBtn.style.display = 'none';
+      deleteBtn.style.display = 'none';
+      // Mostra Salvar e Cancelar
+      saveBtn.style.display = 'inline-block';
+      cancelBtn.style.display = 'inline-block';
+    });
+
+    actionsDiv.appendChild(editBtn);
+    actionsDiv.appendChild(saveBtn);
+    actionsDiv.appendChild(cancelBtn);
+    actionsDiv.appendChild(deleteBtn);
+
+    div.appendChild(authorEl);
+    div.appendChild(textEl);
+    div.appendChild(editTextarea);
+    div.appendChild(actionsDiv);
+
+    commentsList.appendChild(div);
+  });
+}
+
+
+commentForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (!selectedDate) {
+    alert('Por favor, selecione um dia no calendário para adicionar comentários.');
+    return;
+  }
+  
+  const author = commentAuthorInput.value.trim();
+  const text = commentTextInput.value.trim();
+  
+  if (!author || !text) {
+    alert('Por favor, preencha seu nome e comentário.');
+    return;
+  }
+  
+  // Verifica se já existe um comentário deste autor nesta data
+  const dateISO = formatDateISO(selectedDate);
+  const existingCommentIndex = comments.findIndex(c => 
+    c.date === dateISO && c.author.toLowerCase() === author.toLowerCase()
+  );
+  
+  if (existingCommentIndex >= 0) {
+    // Atualiza comentário existente
+    comments[existingCommentIndex].text = text;
+  } else {
+    // Adiciona novo comentário
+    comments.push({
+      id: generateId(),
+      author,
+      text,
+      date: dateISO
+    });
+  }
+  
+  saveData();
+  commentAuthorInput.value = '';
+  commentTextInput.value = '';
+  renderCommentsForDate(selectedDate);
+});
+
+  </script>
+</body>
+</html>
